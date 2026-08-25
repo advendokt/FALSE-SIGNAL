@@ -9,8 +9,10 @@
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "FalseSignalPlayerState.h"
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
+#include "Interaction/RealityAwareInteractable.h"
 #include "FalseSignal.h"
 #include "Engine/World.h"
 
@@ -265,7 +267,58 @@ bool AFalseSignalCharacter::ValidateInteractionLineOfSight_Server(const AActor* 
 
 bool AFalseSignalCharacter::ValidateInteractionReality_Server(const AActor* TargetActor)
 {
-	return IsValid(TargetActor);
+	if (!IsValid(TargetActor))
+	{
+		return false;
+	}
+
+	const bool bIsRealityAware = TargetActor->GetClass()->ImplementsInterface(URealityAwareInteractable::StaticClass());
+	if (!bIsRealityAware)
+	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Log, TEXT("[RealityValidation] Player=%s Reality=%s Target=%s Result=ALLOW (TargetNotRealityAware)"),
+			*GetNameSafe(this),
+			TEXT("N/A"),
+			*GetNameSafe(TargetActor));
+#endif
+		return true;
+	}
+
+	const AFalseSignalPlayerState* FalseSignalPlayerState = GetPlayerState<AFalseSignalPlayerState>();
+	if (!IsValid(FalseSignalPlayerState))
+	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[RealityValidation] Player=%s Reality=%s Target=%s Result=DENY (MissingPlayerState)"),
+			*GetNameSafe(this),
+			TEXT("N/A"),
+			*GetNameSafe(TargetActor));
+#endif
+		return false;
+	}
+
+	const EFalseSignalRealityProfile RealityProfile = FalseSignalPlayerState->GetRealityProfile();
+	if (RealityProfile == EFalseSignalRealityProfile::Unassigned)
+	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[RealityValidation] Player=%s Reality=%s Target=%s Result=DENY (UnassignedReality)"),
+			*GetNameSafe(this),
+			*UEnum::GetValueAsString(RealityProfile),
+			*GetNameSafe(TargetActor));
+#endif
+		return false;
+	}
+
+	const bool bAllowed = IRealityAwareInteractable::Execute_IsInteractionAllowedForReality(const_cast<AActor*>(TargetActor), RealityProfile);
+
+#if !(UE_BUILD_SHIPPING)
+	UE_LOG(LogFalseSignal, Log, TEXT("[RealityValidation] Player=%s Reality=%s Target=%s Result=%s"),
+		*GetNameSafe(this),
+		*UEnum::GetValueAsString(RealityProfile),
+		*GetNameSafe(TargetActor),
+		bAllowed ? TEXT("ALLOW") : TEXT("DENY"));
+#endif
+
+	return bAllowed;
 }
 
 bool AFalseSignalCharacter::GetServerInteractionView(FVector& OutLocation, FVector& OutDirection)
