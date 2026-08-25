@@ -7,24 +7,22 @@
 #include "Interaction/Interactable.h"
 #include "Interaction/RealityAwareInteractable.h"
 #include "Reality/RealityProfileTypes.h"
-#include "RealityGateDoor.generated.h"
+#include "RealityPuzzleSwitch.generated.h"
 
 class AFalseSignalPlayerState;
+class ARealityCoopPuzzleCoordinator;
 class USceneComponent;
 class UStaticMeshComponent;
-class UBoxComponent;
 
 UCLASS()
-class FALSESIGNAL_API ARealityGateDoor : public AActor, public IInteractable, public IRealityAwareInteractable
+class FALSESIGNAL_API ARealityPuzzleSwitch : public AActor, public IInteractable, public IRealityAwareInteractable
 {
 	GENERATED_BODY()
 
 public:
-	ARealityGateDoor();
+	ARealityPuzzleSwitch();
 
-	/** Server-side gameplay API for opening the gate. Idempotent and authoritative-only. */
-	UFUNCTION(BlueprintCallable, Category = "Gate")
-	void OpenGate();
+	bool IsActivated() const { return bActivated; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -35,24 +33,24 @@ protected:
 	TObjectPtr<USceneComponent> SceneRoot;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	TObjectPtr<UStaticMeshComponent> DoorMesh;
+	TObjectPtr<UStaticMeshComponent> SwitchMesh;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	TObjectPtr<UStaticMeshComponent> WallMesh;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Puzzle")
+	EFalseSignalRealityProfile RequiredReality = EFalseSignalRealityProfile::Unassigned;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	TObjectPtr<UBoxComponent> SharedBlocker;
+	UPROPERTY(ReplicatedUsing = OnRep_Activated, VisibleAnywhere, BlueprintReadOnly, Category = "Puzzle")
+	bool bActivated = false;
 
-	UPROPERTY(ReplicatedUsing = OnRep_IsOpen, VisibleAnywhere, BlueprintReadOnly, Category = "Gate")
-	bool bIsOpen = false;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual")
+	FRotator ActivatedRelativeRotation = FRotator(-35.0f, 0.0f, 0.0f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gate")
-	bool bAllowDirectInteraction = true;
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Puzzle")
+	TObjectPtr<ARealityCoopPuzzleCoordinator> Coordinator;
 
 	UFUNCTION()
-	void OnRep_IsOpen();
+	void OnRep_Activated();
 
-	void ApplyGateState();
+	void ApplyActivatedVisualState();
 	void ApplyLocalPresentation();
 
 private:
@@ -65,6 +63,7 @@ private:
 	TWeakObjectPtr<AFalseSignalPlayerState> BoundLocalPlayerState;
 	FDelegateHandle RealityProfileChangedHandle;
 	FTimerHandle PresentationRetryTimerHandle;
+	FRotator InitialSwitchRelativeRotation = FRotator::ZeroRotator;
 
 public:
 	virtual bool CanInteract_Implementation(AActor* Interactor) const override;

@@ -54,6 +54,21 @@ ARealityGateDoor::ARealityGateDoor()
 	}
 }
 
+void ARealityGateDoor::OpenGate()
+{
+	if (!HasAuthority() || bIsOpen)
+	{
+		return;
+	}
+
+	bIsOpen = true;
+	ApplyGateState();
+
+#if !(UE_BUILD_SHIPPING)
+	UE_LOG(LogFalseSignal, Log, TEXT("[RealityGateDoor] OpenGate Actor=%s"), *GetNameSafe(this));
+#endif
+}
+
 void ARealityGateDoor::BeginPlay()
 {
 	Super::BeginPlay();
@@ -209,18 +224,17 @@ void ARealityGateDoor::UnbindLocalRealityState()
 
 bool ARealityGateDoor::CanInteract_Implementation(AActor* Interactor) const
 {
-	return !bIsOpen;
+	return bAllowDirectInteraction && !bIsOpen;
 }
 
 void ARealityGateDoor::Interact_Implementation(AActor* Interactor)
 {
-	if (!HasAuthority() || bIsOpen)
+	if (!HasAuthority() || !bAllowDirectInteraction)
 	{
 		return;
 	}
 
-	bIsOpen = true;
-	ApplyGateState();
+	OpenGate();
 
 #if !(UE_BUILD_SHIPPING)
 	UE_LOG(LogFalseSignal, Log, TEXT("[RealityGateDoor] Opened by %s on %s"), *GetNameSafe(Interactor), *GetNameSafe(this));
