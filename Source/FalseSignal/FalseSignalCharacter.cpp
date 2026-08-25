@@ -142,6 +142,11 @@ void AFalseSignalCharacter::DoInteract()
 	}
 
 	AActor* TargetActor = InteractionComponent->GetCurrentInteractableActor();
+
+#if !(UE_BUILD_SHIPPING)
+	UE_LOG(LogFalseSignal, Log, TEXT("[InteractionDebug] DoInteract Character=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
+
 	if (!IsValid(TargetActor))
 	{
 		return;
@@ -152,6 +157,10 @@ void AFalseSignalCharacter::DoInteract()
 
 void AFalseSignalCharacter::ServerTryInteract_Implementation(AActor* TargetActor)
 {
+#if !(UE_BUILD_SHIPPING)
+	UE_LOG(LogFalseSignal, Log, TEXT("[InteractionDebug] ServerTryInteract Interactor=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
+
 	if (!ValidateInteractionTarget_Server(TargetActor))
 	{
 		return;
@@ -164,47 +173,74 @@ bool AFalseSignalCharacter::ValidateInteractionTarget_Server(AActor* TargetActor
 {
 	if (!HasAuthority() || !IsValid(TargetActor))
 	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[InteractionDebug] ValidateInteractionTarget FAILED Stage=InvalidTarget Interactor=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
 		return false;
 	}
 
 	if (TargetActor->GetWorld() != GetWorld())
 	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[InteractionDebug] ValidateInteractionTarget FAILED Stage=WorldMismatch Interactor=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
 		return false;
 	}
 
 	if (!TargetActor->GetClass()->ImplementsInterface(UInteractable::StaticClass()))
 	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[InteractionDebug] ValidateInteractionTarget FAILED Stage=MissingIInteractable Interactor=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
 		return false;
 	}
 
 	if (!ValidateInteractionReality_Server(TargetActor))
 	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[InteractionDebug] ValidateInteractionTarget FAILED Stage=RealityValidation Interactor=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
 		return false;
 	}
 
 	if (!InteractionComponent)
 	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[InteractionDebug] ValidateInteractionTarget FAILED Stage=MissingInteractionComponent Interactor=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
 		return false;
 	}
 
 	const float MaxDistance = InteractionComponent->GetInteractionDistance();
 	if (MaxDistance <= 0.0f)
 	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[InteractionDebug] ValidateInteractionTarget FAILED Stage=InvalidInteractionDistance Interactor=%s Target=%s Distance=%.2f"), *GetNameSafe(this), *GetNameSafe(TargetActor), MaxDistance);
+#endif
 		return false;
 	}
 
 	if (!ValidateInteractionDistance_Server(TargetActor, MaxDistance))
 	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[InteractionDebug] ValidateInteractionTarget FAILED Stage=Distance Interactor=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
 		return false;
 	}
 
 	if (!ValidateInteractionLineOfSight_Server(TargetActor, MaxDistance))
 	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[InteractionDebug] ValidateInteractionTarget FAILED Stage=LineOfSight Interactor=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
 		return false;
 	}
 
 	if (!IInteractable::Execute_CanInteract(TargetActor, this))
 	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[InteractionDebug] ValidateInteractionTarget FAILED Stage=CanInteract Interactor=%s Target=%s"), *GetNameSafe(this), *GetNameSafe(TargetActor));
+#endif
 		return false;
 	}
 
