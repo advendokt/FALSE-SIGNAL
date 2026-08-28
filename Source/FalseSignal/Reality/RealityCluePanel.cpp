@@ -1,12 +1,13 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Reality/RealityCluePanel.h"
+#include "FalseSignal.h"
 #include "FalseSignalPlayerState.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Components/TextRenderComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Reality/RealitySequencePuzzleCoordinator.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -23,29 +24,41 @@ ARealityCluePanel::ARealityCluePanel()
 	PanelMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	PanelMesh->SetRelativeScale3D(FVector(0.05f, 2.0f, 1.5f));
 
-	SymbolText0 = CreateDefaultSubobject<UTextRenderComponent>(TEXT("SymbolText0"));
-	SymbolText0->SetupAttachment(SceneRoot);
-	SymbolText0->SetHorizontalAlignment(EHorizTextAligment::EHTA_Center);
-	SymbolText0->SetWorldSize(24.0f);
-	SymbolText0->SetRelativeLocation(FVector(3.0f, -90.0f, 60.0f));
+	SymbolSlot0 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SymbolSlot0"));
+	SymbolSlot0->SetupAttachment(SceneRoot);
+	SymbolSlot0->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SymbolSlot0->SetRelativeLocation(FVector(3.0f, -120.0f, 60.0f));
+	SymbolSlot0->SetRelativeScale3D(FVector(0.25f));
 
-	SymbolText1 = CreateDefaultSubobject<UTextRenderComponent>(TEXT("SymbolText1"));
-	SymbolText1->SetupAttachment(SceneRoot);
-	SymbolText1->SetHorizontalAlignment(EHorizTextAligment::EHTA_Center);
-	SymbolText1->SetWorldSize(24.0f);
-	SymbolText1->SetRelativeLocation(FVector(3.0f, -30.0f, 60.0f));
+	SymbolSlot1 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SymbolSlot1"));
+	SymbolSlot1->SetupAttachment(SceneRoot);
+	SymbolSlot1->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SymbolSlot1->SetRelativeLocation(FVector(3.0f, -72.0f, 60.0f));
+	SymbolSlot1->SetRelativeScale3D(FVector(0.25f));
 
-	SymbolText2 = CreateDefaultSubobject<UTextRenderComponent>(TEXT("SymbolText2"));
-	SymbolText2->SetupAttachment(SceneRoot);
-	SymbolText2->SetHorizontalAlignment(EHorizTextAligment::EHTA_Center);
-	SymbolText2->SetWorldSize(24.0f);
-	SymbolText2->SetRelativeLocation(FVector(3.0f, 30.0f, 60.0f));
+	SymbolSlot2 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SymbolSlot2"));
+	SymbolSlot2->SetupAttachment(SceneRoot);
+	SymbolSlot2->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SymbolSlot2->SetRelativeLocation(FVector(3.0f, -24.0f, 60.0f));
+	SymbolSlot2->SetRelativeScale3D(FVector(0.25f));
 
-	SymbolText3 = CreateDefaultSubobject<UTextRenderComponent>(TEXT("SymbolText3"));
-	SymbolText3->SetupAttachment(SceneRoot);
-	SymbolText3->SetHorizontalAlignment(EHorizTextAligment::EHTA_Center);
-	SymbolText3->SetWorldSize(24.0f);
-	SymbolText3->SetRelativeLocation(FVector(3.0f, 90.0f, 60.0f));
+	SymbolSlot3 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SymbolSlot3"));
+	SymbolSlot3->SetupAttachment(SceneRoot);
+	SymbolSlot3->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SymbolSlot3->SetRelativeLocation(FVector(3.0f, 24.0f, 60.0f));
+	SymbolSlot3->SetRelativeScale3D(FVector(0.25f));
+
+	SymbolSlot4 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SymbolSlot4"));
+	SymbolSlot4->SetupAttachment(SceneRoot);
+	SymbolSlot4->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SymbolSlot4->SetRelativeLocation(FVector(3.0f, 72.0f, 60.0f));
+	SymbolSlot4->SetRelativeScale3D(FVector(0.25f));
+
+	SymbolSlot5 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SymbolSlot5"));
+	SymbolSlot5->SetupAttachment(SceneRoot);
+	SymbolSlot5->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SymbolSlot5->SetRelativeLocation(FVector(3.0f, 120.0f, 60.0f));
+	SymbolSlot5->SetRelativeScale3D(FVector(0.25f));
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeMesh.Succeeded())
@@ -64,9 +77,9 @@ void ARealityCluePanel::BeginPlay()
 {
 	Super::BeginPlay();
 
-	ApplyClueText();
+	TryBindToCoordinator();
 	TryBindToLocalRealityState();
-	ApplyLocalPresentation();
+	RefreshPresentation();
 
 	if (GetWorld())
 	{
@@ -81,20 +94,21 @@ void ARealityCluePanel::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		GetWorld()->GetTimerManager().ClearTimer(PresentationRetryTimerHandle);
 	}
 
+	UnbindCoordinator();
 	UnbindLocalRealityState();
 
 	Super::EndPlay(EndPlayReason);
 }
 
-void ARealityCluePanel::ApplyLocalPresentation()
+void ARealityCluePanel::RefreshPresentation()
 {
-	EFalseSignalRealityProfile LocalProfile = EFalseSignalRealityProfile::Unassigned;
+	RefreshSymbolsFromSequence();
 
+	EFalseSignalRealityProfile LocalProfile = EFalseSignalRealityProfile::Unassigned;
 	if (!BoundLocalPlayerState.IsValid())
 	{
 		TryBindToLocalRealityState();
 	}
-
 	if (BoundLocalPlayerState.IsValid())
 	{
 		LocalProfile = BoundLocalPlayerState->GetRealityProfile();
@@ -107,75 +121,50 @@ void ARealityCluePanel::ApplyLocalPresentation()
 		PanelMesh->SetVisibility(bShowClue, true);
 	}
 
-	if (SymbolText0)
+	const TArray<UStaticMeshComponent*> Slots = { SymbolSlot0, SymbolSlot1, SymbolSlot2, SymbolSlot3, SymbolSlot4, SymbolSlot5 };
+	for (UStaticMeshComponent* Slot : Slots)
 	{
-		SymbolText0->SetVisibility(bShowClue, true);
-	}
-	if (SymbolText1)
-	{
-		SymbolText1->SetVisibility(bShowClue, true);
-	}
-	if (SymbolText2)
-	{
-		SymbolText2->SetVisibility(bShowClue, true);
-	}
-	if (SymbolText3)
-	{
-		SymbolText3->SetVisibility(bShowClue, true);
+		const bool bHasMesh = IsValid(Slot) && IsValid(Slot->GetStaticMesh());
+		SetSlotVisibility(Slot, bShowClue && bHasMesh);
 	}
 }
 
-void ARealityCluePanel::ApplyClueText()
+void ARealityCluePanel::RefreshSymbolsFromSequence()
 {
-	const int32 NumSymbols = ClueSymbols.Num();
+	const TArray<ERealityPuzzleSymbol>& SequenceSource = GetCurrentSequenceSource();
+	constexpr int32 MaxSlots = 6;
 
-	if (SymbolText0)
+	if (SequenceSource.Num() > MaxSlots)
 	{
-		SymbolText0->SetText(NumSymbols > 0 ? SymbolToText(ClueSymbols[0]) : FText::GetEmpty());
-	}
-	if (SymbolText1)
-	{
-		SymbolText1->SetText(NumSymbols > 1 ? SymbolToText(ClueSymbols[1]) : FText::GetEmpty());
-	}
-	if (SymbolText2)
-	{
-		SymbolText2->SetText(NumSymbols > 2 ? SymbolToText(ClueSymbols[2]) : FText::GetEmpty());
-	}
-	if (SymbolText3)
-	{
-		SymbolText3->SetText(NumSymbols > 3 ? SymbolToText(ClueSymbols[3]) : FText::GetEmpty());
-	}
-}
-
-FText ARealityCluePanel::SymbolToText(ERealityPuzzleSymbol Symbol) const
-{
-	switch (Symbol)
-	{
-	case ERealityPuzzleSymbol::Triangle:
-		return FText::FromString(TEXT("TRIANGLE"));
-	case ERealityPuzzleSymbol::Circle:
-		return FText::FromString(TEXT("CIRCLE"));
-	case ERealityPuzzleSymbol::Square:
-		return FText::FromString(TEXT("SQUARE"));
-	case ERealityPuzzleSymbol::Cross:
-		return FText::FromString(TEXT("CROSS"));
-	default:
-		break;
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[SequencePuzzle] CluePanel %s received sequence length %d, showing first %d"), *GetNameSafe(this), SequenceSource.Num(), MaxSlots);
+#endif
 	}
 
-	return FText::FromString(TEXT("UNKNOWN"));
+	const TArray<UStaticMeshComponent*> Slots = { SymbolSlot0, SymbolSlot1, SymbolSlot2, SymbolSlot3, SymbolSlot4, SymbolSlot5 };
+	for (int32 Index = 0; Index < Slots.Num(); ++Index)
+	{
+		UStaticMesh* MeshToSet = nullptr;
+		if (SequenceSource.IsValidIndex(Index))
+		{
+			MeshToSet = SymbolVisuals.GetMeshForSymbol(SequenceSource[Index]);
+		}
+		SetSlotMesh(Slots[Index], MeshToSet);
+	}
 }
 
 void ARealityCluePanel::HandleLocalRealityProfileChanged(EFalseSignalRealityProfile NewProfile)
 {
-	ApplyLocalPresentation();
+	RefreshPresentation();
 }
 
 void ARealityCluePanel::HandlePresentationRetry()
 {
-	if (TryBindToLocalRealityState())
+	const bool bBoundReality = TryBindToLocalRealityState();
+	const bool bBoundCoordinatorLocal = TryBindToCoordinator();
+	if (bBoundReality || bBoundCoordinatorLocal)
 	{
-		ApplyLocalPresentation();
+		RefreshPresentation();
 	}
 
 	if (BoundLocalPlayerState.IsValid() && BoundLocalPlayerState->GetRealityProfile() != EFalseSignalRealityProfile::Unassigned && GetWorld())
@@ -229,4 +218,75 @@ void ARealityCluePanel::UnbindLocalRealityState()
 
 	RealityProfileChangedHandle.Reset();
 	BoundLocalPlayerState.Reset();
+}
+
+bool ARealityCluePanel::TryBindToCoordinator()
+{
+	ARealitySequencePuzzleCoordinator* LocalCoordinator = Coordinator.Get();
+	if (LocalCoordinator == BoundCoordinator.Get())
+	{
+		return BoundCoordinator.IsValid();
+	}
+
+	UnbindCoordinator();
+
+	if (!IsValid(LocalCoordinator))
+	{
+		return false;
+	}
+
+	CoordinatorSequenceChangedHandle = LocalCoordinator->OnSequenceChanged().AddUObject(this, &ARealityCluePanel::HandleCoordinatorSequenceChanged);
+	BoundCoordinator = LocalCoordinator;
+	return true;
+}
+
+void ARealityCluePanel::UnbindCoordinator()
+{
+	if (BoundCoordinator.IsValid() && CoordinatorSequenceChangedHandle.IsValid())
+	{
+		BoundCoordinator->OnSequenceChanged().Remove(CoordinatorSequenceChangedHandle);
+	}
+
+	CoordinatorSequenceChangedHandle.Reset();
+	BoundCoordinator.Reset();
+}
+
+void ARealityCluePanel::HandleCoordinatorSequenceChanged()
+{
+	RefreshPresentation();
+}
+
+const TArray<ERealityPuzzleSymbol>& ARealityCluePanel::GetCurrentSequenceSource() const
+{
+	if (BoundCoordinator.IsValid())
+	{
+		return BoundCoordinator->GetExpectedSequence();
+	}
+
+	if (IsValid(Coordinator.Get()))
+	{
+		return Coordinator->GetExpectedSequence();
+	}
+
+	return ClueSymbols;
+}
+
+void ARealityCluePanel::SetSlotVisibility(UStaticMeshComponent* Slot, bool bVisible)
+{
+	if (!Slot)
+	{
+		return;
+	}
+
+	Slot->SetVisibility(bVisible, true);
+}
+
+void ARealityCluePanel::SetSlotMesh(UStaticMeshComponent* Slot, UStaticMesh* Mesh)
+{
+	if (!Slot)
+	{
+		return;
+	}
+
+	Slot->SetStaticMesh(Mesh);
 }

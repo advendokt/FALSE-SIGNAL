@@ -9,9 +9,9 @@
 #include "RealityCluePanel.generated.h"
 
 class AFalseSignalPlayerState;
+class ARealitySequencePuzzleCoordinator;
 class USceneComponent;
 class UStaticMeshComponent;
-class UTextRenderComponent;
 
 UCLASS()
 class FALSESIGNAL_API ARealityCluePanel : public AActor
@@ -32,16 +32,22 @@ protected:
 	TObjectPtr<UStaticMeshComponent> PanelMesh;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	TObjectPtr<UTextRenderComponent> SymbolText0;
+	TObjectPtr<UStaticMeshComponent> SymbolSlot0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	TObjectPtr<UTextRenderComponent> SymbolText1;
+	TObjectPtr<UStaticMeshComponent> SymbolSlot1;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	TObjectPtr<UTextRenderComponent> SymbolText2;
+	TObjectPtr<UStaticMeshComponent> SymbolSlot2;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	TObjectPtr<UTextRenderComponent> SymbolText3;
+	TObjectPtr<UStaticMeshComponent> SymbolSlot3;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UStaticMeshComponent> SymbolSlot4;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UStaticMeshComponent> SymbolSlot5;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Clue")
 	EFalseSignalRealityProfile RequiredReality = EFalseSignalRealityProfile::RealityA;
@@ -49,9 +55,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Clue")
 	TArray<ERealityPuzzleSymbol> ClueSymbols;
 
-	void ApplyLocalPresentation();
-	void ApplyClueText();
-	FText SymbolToText(ERealityPuzzleSymbol Symbol) const;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Clue")
+	FRealityPuzzleSymbolVisualSet SymbolVisuals;
+
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Clue")
+	TObjectPtr<ARealitySequencePuzzleCoordinator> Coordinator;
+
+	void RefreshPresentation();
+	void RefreshSymbolsFromSequence();
 
 private:
 	void HandleLocalRealityProfileChanged(EFalseSignalRealityProfile NewProfile);
@@ -59,8 +70,16 @@ private:
 	bool TryBindToLocalRealityState();
 	AFalseSignalPlayerState* ResolveLocalPlayerState() const;
 	void UnbindLocalRealityState();
+	bool TryBindToCoordinator();
+	void UnbindCoordinator();
+	void HandleCoordinatorSequenceChanged();
+	const TArray<ERealityPuzzleSymbol>& GetCurrentSequenceSource() const;
+	void SetSlotVisibility(UStaticMeshComponent* Slot, bool bVisible);
+	void SetSlotMesh(UStaticMeshComponent* Slot, UStaticMesh* Mesh);
 
 	TWeakObjectPtr<AFalseSignalPlayerState> BoundLocalPlayerState;
+	TWeakObjectPtr<ARealitySequencePuzzleCoordinator> BoundCoordinator;
 	FDelegateHandle RealityProfileChangedHandle;
+	FDelegateHandle CoordinatorSequenceChangedHandle;
 	FTimerHandle PresentationRetryTimerHandle;
 };

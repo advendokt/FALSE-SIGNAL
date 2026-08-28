@@ -7,7 +7,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
 #include "Reality/RealitySequencePuzzleCoordinator.h"
+#include "Sound/SoundBase.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -26,6 +28,12 @@ ARealitySequenceButton::ARealitySequenceButton()
 	ButtonMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	ButtonMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 
+	SymbolMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SymbolMesh"));
+	SymbolMesh->SetupAttachment(ButtonMesh);
+	SymbolMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SymbolMesh->SetRelativeLocation(FVector(6.0f, 0.0f, 0.0f));
+	SymbolMesh->SetRelativeScale3D(FVector(0.35f));
+
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeMesh.Succeeded())
 	{
@@ -36,12 +44,23 @@ ARealitySequenceButton::ARealitySequenceButton()
 	if (BaseMaterial.Succeeded())
 	{
 		ButtonMesh->SetMaterial(0, BaseMaterial.Object);
+		SymbolMesh->SetMaterial(0, BaseMaterial.Object);
 	}
+}
+
+void ARealitySequenceButton::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	RefreshSymbolMesh();
 }
 
 void ARealitySequenceButton::BeginPlay()
 {
 	Super::BeginPlay();
+
+	RefreshSymbolMesh();
+	InitializeFeedbackMaterials();
+	ApplyFeedbackColor(NormalColor);
 
 	if (ButtonMesh)
 	{
@@ -63,6 +82,7 @@ void ARealitySequenceButton::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		GetWorld()->GetTimerManager().ClearTimer(PresentationRetryTimerHandle);
 		GetWorld()->GetTimerManager().ClearTimer(PressFeedbackReturnTimerHandle);
+		GetWorld()->GetTimerManager().ClearTimer(FeedbackColorRestoreTimerHandle);
 	}
 
 	UnbindLocalRealityState();
@@ -132,6 +152,11 @@ void ARealitySequenceButton::HandlePressFeedbackReturn()
 	ButtonMesh->SetRelativeLocation(InitialButtonRelativeLocation);
 }
 
+void ARealitySequenceButton::HandleFeedbackColorRestore()
+{
+	ApplyFeedbackColor(NormalColor);
+}
+
 void ARealitySequenceButton::ApplyLocalPresentation()
 {
 	EFalseSignalRealityProfile LocalProfile = EFalseSignalRealityProfile::Unassigned;
@@ -150,6 +175,104 @@ void ARealitySequenceButton::ApplyLocalPresentation()
 	if (ButtonMesh)
 	{
 		ButtonMesh->SetVisibility(bShowButton, true);
+	}
+}
+
+void ARealitySequenceButton::RefreshSymbolMesh()
+{
+	if (!SymbolMesh)
+	{
+		return;
+	}
+
+	SymbolMesh->SetStaticMesh(SymbolVisuals.GetMeshForSymbol(SymbolId));
+}
+
+void ARealitySequenceButton::InitializeFeedbackMaterials()
+{
+	if (ButtonMesh)
+	{
+		ButtonMeshDynamicMaterial = ButtonMesh->CreateAndSetMaterialInstanceDynamic(0);
+	}
+
+	if (SymbolMesh)
+	{
+		SymbolMeshDynamicMaterial = SymbolMesh->CreateAndSetMaterialInstanceDynamic(0);
+	}
+}
+
+void ARealitySequenceButton::ApplyFeedbackColor(const FLinearColor& Color)
+{
+	if (ButtonMeshDynamicMaterial)
+	{
+		ButtonMeshDynamicMaterial->SetVectorParameterValue(ColorParameterName, Color);
+	}
+
+	if (SymbolMeshDynamicMaterial)
+	{
+		SymbolMeshDynamicMaterial->SetVectorParameterValue(ColorParameterName, Color);
+	}
+}
+
+void ARealitySequenceButton::PlayFeedbackSound(USoundBase* SoundToPlay) const
+{
+	if (!SoundToPlay)
+	{
+		return;
+	}
+
+	UGameplayStatics::PlaySoundAtLocation(this, SoundToPlay, GetActorLocation());
+}
+
+void ARealitySequenceButton::TriggerErrorFeedback()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	MulticastPlayErrorFeedback();
+}
+
+void ARealitySequenceButton::TriggerSuccessFeedback()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	MulticastPlaySuccessFeedback();
+}
+
+void ARealitySequenceButton::MulticastPlayErrorFeedback_Implementation()
+{
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(FeedbackColorRestoreTimerHandle);
+	}
+
+	ApplyFeedbackColor(ErrorColor);
+	PlayFeedbackSound(ErrorFeedbackSound);
+
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().SetTimer(FeedbackColorRestoreTimerHandle, this, &ARealitySequenceButton::HandleFeedbackColorRestore, ErrorFeedbackDuration, false);
+	}
+}
+
+void ARealitySequenceButton::MulticastPlaySuccessFeedback_Implementation()
+{
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(FeedbackColorRestoreTimerHandle);
+	}
+
+	ApplyFeedbackColor(SuccessColor);
+	PlayFeedbackSound(SuccessFeedbackSound);
+
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().SetTimer(FeedbackColorRestoreTimerHandle, this, &ARealitySequenceButton::HandleFeedbackColorRestore, SuccessFeedbackDuration, false);
 	}
 }
 
