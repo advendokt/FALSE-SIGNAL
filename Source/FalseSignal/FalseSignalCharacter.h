@@ -13,6 +13,7 @@ class UCameraComponent;
 class UInputAction;
 class UInteractionComponent;
 struct FInputActionValue;
+class ARealityKeypad;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
@@ -93,6 +94,11 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerTryInteract(AActor* TargetActor);
 	void ServerTryInteract_Implementation(AActor* TargetActor);
+
+	/** Client-owned pathway for future keypad UI -> server password submit */
+	UFUNCTION(Server, Reliable)
+	void ServerSubmitKeypadPassword(ARealityKeypad* Keypad, const FString& SubmittedPassword);
+	void ServerSubmitKeypadPassword_Implementation(ARealityKeypad* Keypad, const FString& SubmittedPassword);
 
 	/** Server-side interaction validation pipeline */
 	bool ValidateInteractionTarget_Server(AActor* TargetActor);

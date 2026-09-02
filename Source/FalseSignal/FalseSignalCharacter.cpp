@@ -13,6 +13,7 @@
 #include "Interaction/InteractionComponent.h"
 #include "Interaction/Interactable.h"
 #include "Interaction/RealityAwareInteractable.h"
+#include "Reality/RealityKeypad.h"
 #include "FalseSignal.h"
 #include "Engine/World.h"
 
@@ -167,6 +168,81 @@ void AFalseSignalCharacter::ServerTryInteract_Implementation(AActor* TargetActor
 	}
 
 	IInteractable::Execute_Interact(TargetActor, this);
+}
+
+void AFalseSignalCharacter::ServerSubmitKeypadPassword_Implementation(ARealityKeypad* Keypad, const FString& SubmittedPassword)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (!IsValid(Keypad) || Keypad->GetWorld() != GetWorld())
+	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[PasswordPuzzle] ServerSubmitKeypadPassword rejected: invalid keypad. Interactor=%s Keypad=%s"), *GetNameSafe(this), *GetNameSafe(Keypad));
+#endif
+		return;
+	}
+
+	const AFalseSignalPlayerState* FalseSignalPlayerState = GetPlayerState<AFalseSignalPlayerState>();
+	if (!IsValid(FalseSignalPlayerState))
+	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[PasswordPuzzle] ServerSubmitKeypadPassword rejected: missing PlayerState. Interactor=%s"), *GetNameSafe(this));
+#endif
+		return;
+	}
+
+	const EFalseSignalRealityProfile RealityProfile = FalseSignalPlayerState->GetRealityProfile();
+	if (RealityProfile == EFalseSignalRealityProfile::Unassigned)
+	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[PasswordPuzzle] ServerSubmitKeypadPassword rejected: unassigned reality. Interactor=%s"), *GetNameSafe(this));
+#endif
+		return;
+	}
+
+	if (!IRealityAwareInteractable::Execute_IsInteractionAllowedForReality(Keypad, RealityProfile))
+	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[PasswordPuzzle] ServerSubmitKeypadPassword rejected: reality denied. Interactor=%s Keypad=%s"), *GetNameSafe(this), *GetNameSafe(Keypad));
+#endif
+		return;
+	}
+
+	const float MaxDistance = Keypad->GetMaxSubmitDistance();
+	const float DistanceTolerance = 25.0f;
+	const float MaxDistanceWithTolerance = MaxDistance + DistanceTolerance;
+	const float DistanceSq = FVector::DistSquared(GetActorLocation(), Keypad->GetActorLocation());
+	if (DistanceSq > FMath::Square(MaxDistanceWithTolerance))
+	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[PasswordPuzzle] ServerSubmitKeypadPassword rejected: too far. Interactor=%s Keypad=%s"), *GetNameSafe(this), *GetNameSafe(Keypad));
+#endif
+		return;
+	}
+
+	if (SubmittedPassword.IsEmpty() || SubmittedPassword.Len() > 32)
+	{
+#if !(UE_BUILD_SHIPPING)
+		UE_LOG(LogFalseSignal, Warning, TEXT("[PasswordPuzzle] ServerSubmitKeypadPassword rejected: invalid input length %d. Interactor=%s"), SubmittedPassword.Len(), *GetNameSafe(this));
+#endif
+		return;
+	}
+
+	for (const TCHAR Character : SubmittedPassword)
+	{
+		if (!FChar::IsDigit(Character))
+		{
+#if !(UE_BUILD_SHIPPING)
+			UE_LOG(LogFalseSignal, Warning, TEXT("[PasswordPuzzle] ServerSubmitKeypadPassword rejected: non-digit input. Interactor=%s"), *GetNameSafe(this));
+#endif
+			return;
+		}
+	}
+
+	Keypad->SubmitPassword_Server(SubmittedPassword, this);
 }
 
 bool AFalseSignalCharacter::ValidateInteractionTarget_Server(AActor* TargetActor)
